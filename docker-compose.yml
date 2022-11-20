@@ -1,0 +1,48 @@
+version: "3.7"
+
+services:
+  db:
+    image: mysql:8.0.31-debian
+    cap_add:
+      # suppress "mbind: Operation not permitted"
+      # https://github.com/docker-library/mysql/issues/422
+      - SYS_NICE
+    volumes:
+        - /etc/localtime:/etc/localtime:ro
+        - db-data:/var/lib/mysql
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    healthcheck:
+      test: |
+        echo 'SHOW TABLES;' |
+        mysql --host=127.0.0.1 --user=root mysql
+      interval: 100ms
+      retries: 100
+      timeout: 10s
+  app:
+    build:
+      context: .
+    stdin_open: true
+    tty: true
+    init: true
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - .:/opt/app
+    tmpfs:
+      - /opt/app/tmp/cache
+      - /opt/app/tmp/pids
+      - /opt/app/tmp/sockets
+    environment:
+      DB_DATABASENAME: app
+      DB_HOST: db
+      DB_USERNAME: root
+      RAILS_SERVE_STATIC_FILES: 1
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
+    driver: local
